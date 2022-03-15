@@ -14,6 +14,11 @@ use watchexec::{
 	project::{self, ProjectType},
 };
 pub async fn dirs(args: &ArgMatches<'static>) -> Result<(PathBuf, PathBuf)> {
+	let workdir = env::current_dir()
+		.and_then(canonicalize)
+		.into_diagnostic()?;
+	debug!(?workdir, "resolved working directory");
+
 	let project_origin = if let Some(origin) = args.value_of("project-origin") {
 		debug!(?origin, "project origin override");
 		canonicalize(origin).into_diagnostic()?
@@ -24,17 +29,16 @@ pub async fn dirs(args: &ArgMatches<'static>) -> Result<(PathBuf, PathBuf)> {
 			origins.extend(project::origins(&path).await);
 		}
 
+		if !args.is_present("paths") {
+			origins.extend(project::origins(&workdir).await);
+		}
+
 		debug!(?origins, "resolved all project origins");
 
 		canonicalize(common_prefix(&origins).unwrap_or_else(|| PathBuf::from(".")))
 			.into_diagnostic()?
 	};
 	debug!(?project_origin, "resolved common/project origin");
-
-	let workdir = env::current_dir()
-		.and_then(canonicalize)
-		.into_diagnostic()?;
-	debug!(?workdir, "resolved working directory");
 
 	Ok((project_origin, workdir))
 }
